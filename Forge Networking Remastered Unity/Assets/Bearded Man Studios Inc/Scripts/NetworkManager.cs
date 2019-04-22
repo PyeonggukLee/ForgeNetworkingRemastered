@@ -17,8 +17,8 @@ namespace BeardedManStudios.Forge.Networking.Unity
 		public UnityAction<Scene, LoadSceneMode> networkSceneLoaded;
 		public event NetWorker.PlayerEvent playerLoadedScene;
 
-		public NetWorker Networker { get; private set; }
-		public NetWorker MasterServerNetworker { get; private set; }
+		public NetWorker Networker { get; protected set; }
+		public NetWorker MasterServerNetworker { get; protected set; }
 		public Dictionary<int, INetworkBehavior> pendingObjects = new Dictionary<int, INetworkBehavior>();
 		public Dictionary<int, NetworkObject> pendingNetworkObjects = new Dictionary<int, NetworkObject>();
 		protected string _masterServerHost;
@@ -33,6 +33,11 @@ namespace BeardedManStudios.Forge.Networking.Unity
 		/// Used to enable or disable the automatic switching for clients
 		/// </summary>
 		public bool automaticScenes = true;
+
+		/// <summary>
+		/// Internal flag to indicate that the Initialize method has been called.
+		/// </summary>
+		protected bool initialized;
 
 #if FN_WEBSERVER
 		MVCWebServer.ForgeWebServer webserver = null;
@@ -98,6 +103,8 @@ namespace BeardedManStudios.Forge.Networking.Unity
 				webserver.Start();
 #endif
 			}
+
+			initialized = true;
 		}
 
 		protected virtual void CreatePendingObjects(NetworkObject obj)
@@ -562,6 +569,10 @@ namespace BeardedManStudios.Forge.Networking.Unity
 
 		public virtual void SceneReady(Scene scene, LoadSceneMode mode)
 		{
+			// The NetworkManager has not yet been initialized with a Networker.
+			if (!initialized)
+				return;
+
 			// If we are loading a completely new scene then we will need
 			// to clear out all the old objects that were stored as they
 			// are no longer needed
