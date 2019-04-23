@@ -88,7 +88,6 @@ public class CubeForgeGame : CubeForgeGameBehavior
 			NetworkManager.Instance.Networker.disconnected += DisconnectedFromServer;
 		}
 	}
-
 	private void PlayerAccepted(NetworkingPlayer player, NetWorker sender)
 	{
 		MainThreadManager.Run(() => { networkObject.SendRpc(player, RPC_INITIALIZE_MAP, min, max, SerializeMap()); });
@@ -172,6 +171,21 @@ public class CubeForgeGame : CubeForgeGameBehavior
 	private void OnDestroy()
 	{
 		Cleanup();
+	}
+
+	private void OnApplicationQuit()
+	{
+		if(NetworkManager.Instance == null || NetworkManager.Instance.Networker == null)
+		{
+			return;
+		}
+
+		switch (NetworkManager.Instance.Networker)
+		{
+			case UDPClient client:
+				client.Disconnect(true);
+				break;
+		}
 	}
 
 	private void Cleanup()

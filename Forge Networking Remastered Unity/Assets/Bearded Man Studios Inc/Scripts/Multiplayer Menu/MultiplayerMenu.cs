@@ -6,6 +6,8 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
+using BeardedManStudios.Forge.Logging;
+using System;
 
 public class MultiplayerMenu : MonoBehaviour
 {
@@ -34,6 +36,11 @@ public class MultiplayerMenu : MonoBehaviour
 	public bool getLocalNetworkConnections = false;
 
 	public bool useTCP = false;
+
+	/// <summary>
+	/// The amount of time in milliseconds for the round trip latency to/from the server
+	/// </summary>
+	public double RoundTripLatency { get; private set; }
 
 	private void Start()
 	{
@@ -101,6 +108,60 @@ public class MultiplayerMenu : MonoBehaviour
 		Connected(client);
 	}
 
+	public void Disconnect()
+	{
+		NetworkManager.Instance?.Disconnect();
+	}
+
+	private void OnPingPong(double ping, NetWorker sender)
+	{
+		RoundTripLatency = ping;
+	}
+
+	private void OnGUI()
+	{
+		if (NetworkManager.Instance == null || NetworkManager.Instance.Networker == null)
+			return;
+
+		var netWorker = NetworkManager.Instance.Networker;
+		switch (netWorker)
+		{
+			case UDPServer server:
+				// If there are no players, then the scene is currently being loaded, otherwise
+				// show the current count of players in the game
+				var playerCount = NetworkManager.Instance.Networker.Players.Count;
+				if (playerCount == 0)
+					WriteLabel(new Rect(14, 14, 100, 25), "Loading...");
+				else
+					WriteLabel(new Rect(14, 14, 100, 25), "Players: " + playerCount);
+				break;
+
+			case UDPClient client:
+				var me = client.Me;
+				if(me == null)
+					WriteLabel(new Rect(14, 14, 100, 25), "Loading...");
+				else
+					WriteLabel(new Rect(14, 14, 100, 25), "NetworkId: " + client.Me?.NetworkId);
+				break;
+		}
+
+		WriteLabel(new Rect(14, 28, 100, 25), "Time: " + NetworkManager.Instance.Networker.Time.Timestep);
+		WriteLabel(new Rect(14, 42, 256, 25), "Bandwidth In: " + NetworkManager.Instance.Networker.BandwidthIn);
+		WriteLabel(new Rect(14, 56, 256, 25), "Bandwidth Out: " + NetworkManager.Instance.Networker.BandwidthOut);
+		WriteLabel(new Rect(14, 70, 256, 25), "Round Trip Latency (ms): " + RoundTripLatency);
+	}
+
+	private void WriteLabel(Rect rect, string message)
+	{
+		GUI.color = Color.black;
+		GUI.Label(rect, message);
+
+		// Do the same thing as above but make the above UI look like a solid
+		// shadow so that the text is readable on any contrast screen
+		GUI.color = Color.white;
+		GUI.Label(rect, message);
+	}
+
 	public void ConnectToMatchmaking()
 	{
 		if (_matchmaking)
@@ -124,7 +185,7 @@ public class MultiplayerMenu : MonoBehaviour
 			// I just make it randomly pick a server... you can do whatever you please!
 			if (response != null && response.serverResponse.Count > 0)
 			{
-				MasterServerResponse.Server server = response.serverResponse[Random.Range(0, response.serverResponse.Count)];
+				MasterServerResponse.Server server = response.serverResponse[UnityEngine.Random.Range(0, response.serverResponse.Count)];
 				//TCPClient client = new TCPClient();
 				UDPClient client = new UDPClient();
 				client.Connect(server.Address, server.Port);
@@ -213,13 +274,31 @@ public class MultiplayerMenu : MonoBehaviour
 		if (useInlineChat && networker.IsServer)
 			SceneManager.sceneLoaded += CreateInlineChat;
 
+
 		if (networker is IServer)
 		{
 			if (!DontChangeSceneOnConnect)
 				SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex + 1);
 			else
 				NetworkObject.Flush(networker); //Called because we are already in the correct scene!
+
+
+			networker.playerConnected += Networker_playerConnected;
+			networker.playerDisconnected += Networker_playerDisconnected;
 		}
+
+		networker.onPingPong += OnPingPong;
+
+	}
+
+	private void Networker_playerConnected(NetworkingPlayer player, NetWorker sender)
+	{
+		BMSLog.Log($"{player.NetworkId} CONNECTED.");
+	}
+
+	private void Networker_playerDisconnected(NetworkingPlayer player, NetWorker sender)
+	{
+		BMSLog.Log($"{player.NetworkId} DISCONNECTED.");
 	}
 
 	private void CreateInlineChat(Scene arg0, LoadSceneMode arg1)
